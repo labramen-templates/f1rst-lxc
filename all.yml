@@ -1,0 +1,71 @@
+---
+# LabRamen Configuration Variables
+
+# System user
+labramen_user: labramen
+labramen_group: labramen
+labramen_password: "quake31"  # Same as aaron's password
+admin_password_hash: "$2y$10$2PBSdO9byOvVxfpoa/iYxOgUb9NXqwjI4HXFLN67buGghkxhN/Pfi"  # Hashed version of "C0n$!$t3ncy!"
+
+# Standard user (for reference)
+standard_user: aaron
+
+# Directories
+config_dir: /etc/labramen
+runtime_dir: /var/lib/labramen
+log_dir: /var/log/labramen
+console_dir: /var/www/labramen
+engine_dir: /opt/labramen
+
+# Git repositories
+console_repo: "https://ramen:gldt-SkSF5xLF7PAauJ9Cbcto@gitlab.com/squirp/ramen-console.git"
+engine_repo: "https://ramen:gldt-5pY9WkYDVsQczZtW1BJa@gitlab.com/squirp/ramen-engine.git"
+
+# Web server configuration
+apache_port: 8642
+nginx_port: 443
+server_name: "{{ ansible_hostname }}.local"
+
+# Redis configuration
+redis_host: localhost
+redis_port: 6379
+
+# SSL certificate (self-signed)
+ssl_cert_path: /etc/ssl/certs/labramen-selfsigned.crt
+ssl_key_path: /etc/ssl/private/labramen-selfsigned.key
+ssl_country: US
+ssl_state: ME
+ssl_locality: Sometown
+ssl_org: LabRamen
+ssl_common_name: "{{ ansible_hostname }}.local"
+
+# Python virtual environment
+venv_path: "{{ engine_dir }}/venv"
+
+# Packages to install
+packages:
+  - apache2
+  - nginx
+  - openssl
+  - php
+  - php-redis
+  - libapache2-mod-php
+  - redis-server
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-redis
+  - git
+  - curl
+  - vim
+
+# Python packages for engine
+python_packages:
+  - redis
+
+labramen_directories:
+  - { path: "{{ console_dir }}", group: "www-data", mode: "0775" }
+  - { path: "{{ engine_dir }}", group: "{{ labramen_group }}", mode: "0775" }
+  - { path: "{{ config_dir }}", group: "{{ labramen_group }}", mode: "0750" }
+  - { path: "{{ runtime_dir }}", group: "{{ labramen_group }}", mode: "0750" }
+  - { path: "{{ log_dir }}", group: "{{ labramen_group }}", mode: "0750" }

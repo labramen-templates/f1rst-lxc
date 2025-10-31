@@ -1,0 +1,53 @@
+---
+# Deploy playbook - configures the container with application/service
+# For Phase 4a, this just creates a test file to verify deployment works
+
+- name: Deploy Application
+  hosts: container
+  become: yes
+  
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+  
+  tasks:
+    - name: Create test file in labramen home directory
+      copy:
+        content: |
+          ╔═══════════════════════════════════════════╗
+          ║   LabRamen Deployment Test - Success!     ║
+          ╚═══════════════════════════════════════════╝
+          
+          This file was created by LabRamen's automated deployment system.
+          
+          Container: {{ ansible_hostname }}
+          IP Address: {{ ansible_default_ipv4.address }}
+          Deployed: {{ ansible_date_time.iso8601 }}
+          
+          If you can see this file, it means:
+          ✓ Terraform successfully provisioned the container
+          ✓ Bootstrap successfully configured SSH
+          ✓ Ansible successfully deployed to the container
+          
+          Next steps:
+          - Add real application deployment tasks
+          - Configure services
+          - Set up monitoring
+          
+          Welcome to LabRamen! 🍜
+        dest: /home/labramen/DEPLOYMENT_SUCCESS.txt
+        owner: labramen
+        group: labramen
+        mode: '0644'
+    
+    - name: Create deployment marker in root
+      copy:
+        content: |
+          Deployment completed by LabRamen
+          Date: {{ ansible_date_time.iso8601 }}
+          User: {{ ansible_user_id }}
+        dest: /root/.labramen-deployment-complete
+        mode: '0644'
+    
+    - name: Display success message
+      debug:
+        msg: "✓ Deployment completed successfully! Check /home/labramen/DEPLOYMENT_SUCCESS.txt"

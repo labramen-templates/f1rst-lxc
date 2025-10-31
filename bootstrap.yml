@@ -1,0 +1,96 @@
+---
+# Edit these values and run: ansible-playbook pct-ssh-simple.yml
+
+- hosts: localhost
+  gather_facts: false
+  vars:
+    proxmox_host: "192.168.1.32"
+    proxmox_ssh_user: "root"
+    proxmox_password: "C0n$!$t3ncy!"
+    container_id: "{{ cid }}" #not the only place this needs to be set
+    container_user_name: "aaron"
+    container_user_password: "quake31"
+  tasks:
+    - name: Add Proxmox host (in-memory)
+      add_host:
+        name: proxmox_target
+        ansible_host: "{{ proxmox_host }}"
+        ansible_user: "{{ proxmox_ssh_user }}"
+        ansible_password: "{{ proxmox_password }}"
+        ansible_become: true
+        ansible_become_method: sudo
+        ansible_become_password: "{{ proxmox_password }}"
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+
+- hosts: proxmox_target
+  gather_facts: false
+  become: true
+  vars:
+    container_id: "{{ cid }}"
+    container_user_name: "aaron"
+    container_user_password: "quake31"
+  tasks:
+    - name: Ensure container is running (ok if already running)
+      shell: "pct start {{ container_id }} || true"
+
+    - name: Create 'admin' group if missing
+      shell: "pct exec {{ container_id }} -- groupadd -f admin || true"
+
+    - name: Create user with home and add to admin,sudo (no error if exists)
+      shell: >-
+        pct exec {{ container_id }} -- bash -lc
+        "id -u {{ container_user_name }} >/dev/null 2>&1 ||
+         useradd -m -s /bin/bash -G admin,sudo {{ container_user_name }}"
+
+    - name: Set user password (simple)
+      shell: >-
+        pct exec {{ container_id }} -- bash -lc
+        "printf '{{ container_user_name }}:{{ container_user_password }}\n' | chpasswd"
+
+
+
+    - name: Ensure .ssh directory exists in container
+      shell: >-
+        pct exec {{ container_id }} -- bash -lc
+        "mkdir -p /home/{{ container_user_name }}/.ssh &&
+         chmod 700 /home/{{ container_user_name }}/.ssh &&
+         chown {{ container_user_name }}:{{ container_user_name }} /home/{{ container_user_name }}/.ssh"
+
+    - name: Read local SSH public key
+      set_fact:
+        ssh_pubkey: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
+
+    - name: Add SSH public key to authorized_keys in container
+      shell: >-
+        pct exec {{ container_id }} -- bash -lc
+        "echo '{{ ssh_pubkey }}' >> /home/{{ container_user_name }}/.ssh/authorized_keys &&
+         chmod 600 /home/{{ container_user_name }}/.ssh/authorized_keys &&
+         chown {{ container_user_name }}:{{ container_user_name }} /home/{{ container_user_name }}/.ssh/authorized_keys"
+
+    - name: Ensure SSH key isn't duplicated (make idempotent)
+      shell: >-
+        pct exec {{ container_id }} -- bash -lc
+        "sort -u /home/{{ container_user_name }}/.ssh/authorized_keys -o /home/{{ container_user_name }}/.ssh/authorized_keys"
+
+
+
+
+    # ↓↓↓ Only this task changed to avoid nested-quote weirdness ↓↓↓
+    - name: Turn on SSH password auth in container (simple/robust)
+      shell: >-
+        pct exec {{ container_id }} -- bash -lc
+        'if grep -Eq "^#?PasswordAuthentication[[:space:]]+" /etc/ssh/sshd_config; then
+           sed -ri "s/^#?PasswordAuthentication[[:space:]]+.*/PasswordAuthentication yes/" /etc/ssh/sshd_config;
+         else
+           echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config;
+         fi'
+
+    - name: Restart SSH service inside container (try common variants)
+      shell: >-
+        pct exec {{ container_id }} -- bash -lc
+        "systemctl restart ssh || systemctl restart sshd || service ssh restart || service sshd restart || true"
+
+    - name: Enable SSH service (best-effort)
+      shell: >-
+        pct exec {{ container_id }} -- bash -lc
+        "systemctl enable --now ssh || systemctl enable --now sshd || true"
